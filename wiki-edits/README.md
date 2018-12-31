@@ -1,0 +1,1 @@
+mvn archetype:generate -DarchetypeGroupId=org.apache.flink -DarchetypeArtifactId=flink-quickstart-java -DarchetypeVersion=1.7.1 -DgroupId=wiki-edits -DartifactId=wiki-edits -Dversion=0.1 -Dpackage=wikiedits -DinteractiveMode=false
