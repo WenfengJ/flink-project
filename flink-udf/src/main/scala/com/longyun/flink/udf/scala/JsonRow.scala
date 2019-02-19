@@ -23,6 +23,7 @@ class JsonRow(val fieldTypeMap:Map[String, DataType]) extends TableFunction[Row]
         case DataTypes.FLOAT => row.setField(i, java.lang.Float.parseFloat(value))
         case DataTypes.INT => row.setField(i, java.lang.Integer.parseInt(value))
         case DataTypes.DOUBLE => row.setField(i, java.lang.Double.parseDouble(value))
+        case DataTypes.LONG => row.setField(i, java.lang.Long.parseLong(value))
         case DataTypes.DATE => {
           val v = java.lang.Long.parseLong(value)
           row.setField(i, new Date(v))
