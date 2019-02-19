@@ -30,8 +30,6 @@ class JsonRow(val fieldTypeMap:Map[String, DataType]) extends TableFunction[Row]
         case _ => row.setField(i, value)
 
       }
-
-      println(i + " : " + value)
     }
 
     collect(row)
