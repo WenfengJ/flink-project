@@ -40,7 +40,7 @@ import org.apache.flink.table.sources.csv.CsvTableSource
 object StreamingJob {
 
   val fieldTypes:Map[String, DataType] = Map("clienttoken" -> DataTypes.STRING,
-    "timestamp" -> DataTypes.TIMESTAMP,
+    "timestamp" -> DataTypes.LONG,
     "state.status" -> DataTypes.STRING,
     "state.value" -> DataTypes.FLOAT)
 
@@ -88,12 +88,12 @@ object StreamingJob {
 //    import scala.collection.JavaConversions._
 //    tableEnv.registerFunction("ly_json_row", new com.longyun.flink.java.udf.JsonRow(fieldTypes))
 
-    val result = tableEnv.sqlQuery("SELECT msg, `ts`,ct,ss,v " +
+    val result = tableEnv.sqlQuery("SELECT `ts`,ct,ss,v " +
       "FROM view_msg " +
       "LEFT JOIN LATERAL TABLE(ly_json_row(msg, 'timestamp', 'clienttoken', 'state.status', 'state.value')) as T1(`ts`,ct,ss, v) ON TRUE " +
       "WHERE v > 50 ")
 
-    val csvSink = new CsvTableSink("data/sink/"+System.currentTimeMillis()+".csv")
+    val csvSink = new CsvTableSink("data/sink/g_"+System.currentTimeMillis()+".csv")
 
     /*
     tableEnv.registerTableSink("CsvSinkTable",
@@ -103,6 +103,14 @@ object StreamingJob {
     */
     result.writeToSink(csvSink)
 
+    val result2 = tableEnv.sqlQuery("SELECT `ts`,ct,ss,v " +
+      "FROM view_msg " +
+      "LEFT JOIN LATERAL TABLE(ly_json_row(msg, 'timestamp', 'clienttoken', 'state.status', 'state.value')) as T1(`ts`,ct,ss, v) ON TRUE " +
+      "WHERE v < 50 ")
+
+    val csvSink2 = new CsvTableSink("data/sink/l_"+System.currentTimeMillis()+".csv")
+
+    result2.writeToSink(csvSink2)
     tableEnv.execute()
   }
 }
