@@ -21,12 +21,12 @@ under the License.
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 
-	<groupId>com.longyun.blink</groupId>
-	<artifactId>rule-engine-blink</artifactId>
+	<groupId>com.longyun</groupId>
+	<artifactId>flink-quickstart-scala</artifactId>
 	<version>1.0-SNAPSHOT</version>
 	<packaging>jar</packaging>
 
-	<name>Rule Engine Blink</name>
+	<name>Flink Quickstart Job</name>
 	<url>http://www.myorganization.org</url>
 
 	<repositories>
@@ -45,7 +45,7 @@ under the License.
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<flink.version>1.5.1</flink.version>
+		<flink.version>1.7.0</flink.version>
 		<scala.binary.version>2.11</scala.binary.version>
 		<scala.version>2.11.12</scala.version>
 	</properties>
@@ -54,35 +54,18 @@ under the License.
 		<!-- Apache Flink dependencies -->
 		<!-- These dependencies are provided, because they should not be packaged into the JAR file. -->
 		<dependency>
-			<groupId>com.alibaba.blink</groupId>
+			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-scala_${scala.binary.version}</artifactId>
 			<version>${flink.version}</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
-			<groupId>com.alibaba.blink</groupId>
+			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-streaming-scala_${scala.binary.version}</artifactId>
 			<version>${flink.version}</version>
 			<scope>provided</scope>
 		</dependency>
 
-		<dependency>
-			<groupId>com.alibaba.blink</groupId>
-			<artifactId>flink-table_${scala.binary.version}</artifactId>
-			<version>${flink.version}</version>
-			<scope>provided</scope>
-		</dependency>
-
-		<dependency>
-			<groupId>com.alibaba.blink</groupId>
-			<artifactId>flink-connector-kafka-0.11_${scala.binary.version}</artifactId>
-			<version>${flink.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>com.alibaba.blink</groupId>
-			<artifactId>flink-json</artifactId>
-			<version>${flink.version}</version>
-		</dependency>
 		<!-- Scala Library, provided by Flink as well. -->
 		<dependency>
 			<groupId>org.scala-lang</groupId>
@@ -137,7 +120,6 @@ under the License.
 							<artifactSet>
 								<excludes>
 									<exclude>org.apache.flink:force-shading</exclude>
-									<!--<exclude>com.alibaba.blink:force-shading</exclude>-->
 									<exclude>com.google.code.findbugs:jsr305</exclude>
 									<exclude>org.slf4j:*</exclude>
 									<exclude>log4j:*</exclude>
@@ -155,13 +137,11 @@ under the License.
 									</excludes>
 								</filter>
 							</filters>
-<!--
 							<transformers>
 								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-									<mainClass>com.longyun.flink.StreamingJob</mainClass>
+									<mainClass>com.longyun.scala.StreamingJob</mainClass>
 								</transformer>
 							</transformers>
-							-->
 						</configuration>
 					</execution>
 				</executions>
@@ -272,26 +252,14 @@ under the License.
 
 			<dependencies>
 				<dependency>
-					<groupId>com.alibaba.blink</groupId>
+					<groupId>org.apache.flink</groupId>
 					<artifactId>flink-scala_${scala.binary.version}</artifactId>
 					<version>${flink.version}</version>
 					<scope>compile</scope>
 				</dependency>
 				<dependency>
-					<groupId>com.alibaba.blink</groupId>
+					<groupId>org.apache.flink</groupId>
 					<artifactId>flink-streaming-scala_${scala.binary.version}</artifactId>
-					<version>${flink.version}</version>
-					<scope>compile</scope>
-				</dependency>
-				<dependency>
-					<groupId>com.alibaba.blink</groupId>
-					<artifactId>flink-table_${scala.binary.version}</artifactId>
-					<version>${flink.version}</version>
-					<scope>compile</scope>
-				</dependency>
-				<dependency>
-					<groupId>com.alibaba.blink</groupId>
-					<artifactId>flink-connector-kafka-0.11_${scala.binary.version}</artifactId>
 					<version>${flink.version}</version>
 					<scope>compile</scope>
 				</dependency>

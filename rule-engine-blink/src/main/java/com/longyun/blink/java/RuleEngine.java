@@ -54,7 +54,9 @@ public class RuleEngine {
                 .sinkPartitionerFixed();         // each Flink partition ends up in at-most one Kafka partition (default)
 
         tableEnv.connect(connect)
-                .withFormat(new Json().deriveSchema())
+                .withFormat(new Json()
+                        .failOnMissingField(false)
+                        .deriveSchema())
                 .withSchema(new Schema()
                         .field("clienttoken", Types.STRING())
                         .field("timestamp", Types.SQL_TIMESTAMP()))
