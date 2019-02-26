@@ -91,6 +91,11 @@ under the License.
 			<scope>provided</scope>
 		</dependency>
 
+		<dependency>
+			<groupId>com.alibaba</groupId>
+			<artifactId>fastjson</artifactId>
+			<version>1.2.49</version>
+		</dependency>
 		<!-- Add connector dependencies here. They must be in the default scope (compile). -->
 
 		<!-- Example:
@@ -300,6 +305,11 @@ under the License.
 					<artifactId>scala-library</artifactId>
 					<version>${scala.version}</version>
 					<scope>compile</scope>
+				</dependency>
+				<dependency>
+					<groupId>com.alibaba</groupId>
+					<artifactId>fastjson</artifactId>
+					<version>1.2.49</version>
 				</dependency>
 			</dependencies>
 		</profile>
