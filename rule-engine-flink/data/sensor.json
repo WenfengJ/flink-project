@@ -1,0 +1,6 @@
+{"clienttoken":"token1","state":{"status":"online", "value":12},"timestamp":1551422889}
+{"clienttoken":"token1","state":{"status":"online", "value":10},"timestamp":1551422989}
+{"clienttoken":"token1","state":{"status":"online", "value":8},"timestamp":1551422819}
+{"clienttoken":"token2","state":{"status":"online", "value":22},"timestamp":1551422889}
+{"clienttoken":"token2","state":{"status":"online", "value":11},"timestamp":1551422989}
+{"clienttoken":"token2","state":{"status":"online", "value":8},"timestamp":1551422819}
