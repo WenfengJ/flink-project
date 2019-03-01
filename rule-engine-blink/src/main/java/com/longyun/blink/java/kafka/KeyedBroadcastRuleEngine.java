@@ -4,7 +4,8 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.google.common.collect.Maps;
 import com.longyun.blink.java.udf.JsonRow;
-import groovy.lang.Tuple;
+import org.apache.flink.api.common.JobExecutionResult;
+import org.apache.flink.api.common.accumulators.Accumulator;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.common.state.BroadcastState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
@@ -12,29 +13,28 @@ import org.apache.flink.api.common.state.ReadOnlyBroadcastState;
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
 import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.streaming.api.datastream.BroadcastStream;
-import org.apache.flink.streaming.api.datastream.DataStream;
-import org.apache.flink.streaming.api.datastream.DataStreamSource;
-import org.apache.flink.streaming.api.datastream.KeyedStream;
+import org.apache.flink.streaming.api.datastream.*;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.api.functions.co.KeyedBroadcastProcessFunction;
 import org.apache.flink.streaming.api.functions.sink.PrintSinkFunction;
+import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
+import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer011;
+import org.apache.flink.streaming.experimental.CollectSink;
 import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.TableEnvironment;
+import org.apache.flink.table.api.java.BatchTableEnvironment;
 import org.apache.flink.table.api.java.StreamTableEnvironment;
 import org.apache.flink.table.api.types.DataType;
 import org.apache.flink.table.api.types.DataTypes;
 import org.apache.flink.table.sinks.PrintTableSink;
+import org.apache.flink.types.Row;
 import org.apache.flink.util.Collector;
-import scala.collection.immutable.Seq;
+import scala.Serializable;
 
-import java.io.Serializable;
-import java.util.Map;
-import java.util.Properties;
-import java.util.TimeZone;
+import java.util.*;
 
 /**
  * @author yuanxiaolong
@@ -66,7 +66,7 @@ public class KeyedBroadcastRuleEngine {
 
         final String sql = "SELECT `ts`,ct,ss,v"
                 + " from tb_raw"
-                + " LEFT JOIN LATERAL TABLE(ly_json_row(raw, 'timestamp', 'clienttoken', 'state.status', 'state.value')) as T1(`ts`,ct,ss, v) ON TRUE";
+                + " LEFT JOIN LATERAL TABLE(json_row(raw, 'timestamp', 'clienttoken', 'state.status', 'state.value')) as T1(`ts`,ct,ss, v) ON TRUE";
 
         DataStreamSource<Rule> ruleStream = env.fromElements(
                     new Rule()
@@ -136,7 +136,8 @@ public class KeyedBroadcastRuleEngine {
                            Rule rule = entry.getValue();
                            //匹配规则
                            if(value.getKey().equals(rule.getTopicPattern())){
-                               out.collect(new RuleRaw().withRule(rule.getRuleSQL()).withRaw(value.getRaw()));
+//                               out.collect(new RuleRaw().withRule(rule.getRuleSQL()).withRaw(value.getRaw()));
+                               out.collect(new RuleRaw().withRule(rule.getId()).withRaw(value.getRaw()));
                            }
                        });
                    }
@@ -144,11 +145,13 @@ public class KeyedBroadcastRuleEngine {
 
         tableEnv.registerDataStream("tb_rule_raw", rrDataStream, "rule, raw");
 
-        tableEnv.sqlQuery("select rule, raw from tb_rule_raw")
-                .writeToSink(new PrintTableSink(TimeZone.getDefault()));
+//        tableEnv.sqlQuery("select rule, raw from tb_rule_raw")
+//                .writeToSink(new PrintTableSink(TimeZone.getDefault()));
 
-//        Table rules = tableEnv.sqlQuery("select distinct rule from tb_rule_raw");
+        Table rules = tableEnv.sqlQuery("select distinct rule from tb_rule_raw");
 //        rules.writeToSink(new PrintTableSink(TimeZone.getDefault()));
+
+//        tableEnv.registerOrReplaceTable("rules", rules);
 
         Map<String, DataType> fieldTypes = Maps.newTreeMap();
         fieldTypes.putIfAbsent("clienttoken", DataTypes.STRING);
@@ -158,6 +161,47 @@ public class KeyedBroadcastRuleEngine {
 
         tableEnv.registerFunction("ly_json_row", new JsonRow(fieldTypes));
 
-        env.execute("blink-broadcast-table");
+/*
+
+        DataStream<Tuple2<Boolean, Row>> dataStream = tableEnv.toRetractStream(rules, Row.class);
+
+        dataStream.process(new ProcessFunction<Tuple2<Boolean, Row>, Object>() {
+            @Override
+            public void processElement(Tuple2<Boolean, Row> tuple2, Context context, Collector<Object> collector) throws Exception {
+                String sql = tuple2.f1.getField(0).toString().replaceAll("json_row\\(", "ly_json_row\\(");
+                Accumulator accumulator = getRuntimeContext().getAccumulator("rules");
+                if(null == accumulator){
+                    accumulator = new RuleContainer();
+                }
+                accumulator.add(sql);
+                collector.collect(sql);
+            }
+        });
+
+*/
+//        DataStream<String> sqlStream = dataStream.filter(t -> t.f0).map(t -> t.f1.getField(0).toString().replaceAll("json_row\\(", "ly_json_row\\("));
+//        ((SingleOutputStreamOperator<String>) sqlStream).returns(String.class).addSink(new PrintSinkFunction<>());
+
+
+//        Table t = tableEnv.sqlQuery("select count(*) from tb_rule_raw group by rule");
+//        t.writeToSink(new PrintTableSink(TimeZone.getDefault()));
+
+
+
+        DataStream<Tuple2<Boolean, Row>> retractStream = tableEnv.toRetractStream(rules, Row.class);
+
+        DataStream<String> ruleIdStream = retractStream.filter(t -> t.f0).map(t -> t.f1.getField(0).toString());
+
+        ((SingleOutputStreamOperator<String>) ruleIdStream).returns(String.class)
+                .addSink(new RichSinkFunction<String>() {
+                    @Override
+                    public void invoke(String value, Context context) throws Exception {
+                        System.out.println(value);
+                    }
+                });
+
+        JobExecutionResult result = env.execute("blink-broadcast-table");
+
+        System.out.println(result.getAllAccumulatorResults());
     }
 }
