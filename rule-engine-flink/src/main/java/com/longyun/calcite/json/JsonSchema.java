@@ -16,40 +16,22 @@ import java.util.Queue;
  **/
 public class JsonSchema extends AbstractSchema {
 
-    private final Queue<String> source;
-    private final JsonTable.Flavor flavor;
     private final String name;
+    private final Map<String, String> tblTplMap;
+    private final MemorySource<String> source;
     private Map<String, Table> tableMap;
 
     /**
      * Creates a Json schema.
      *
-     * @param flavor     Whether to instantiate flavor tables that undergo
-     *                   query optimization
-     * @param  source
+     * @param tblTplMap  the table name and the template json string
+     * @param name  the schema name(simliar to db name)
      */
-    public JsonSchema(JsonTable.Flavor flavor, Queue<String> source, String name) {
+    public JsonSchema(String name, Map<String, String> tblTplMap, MemorySource<String> source) {
         super();
-        this.flavor = flavor;
-        this.source = source;
         this.name = name;
-    }
-
-    /** Looks for a suffix on a string and returns
-     * either the string with the suffix removed
-     * or the original string. */
-    private static String trim(String s, String suffix) {
-        String trimmed = trimOrNull(s, suffix);
-        return trimmed != null ? trimmed : s;
-    }
-
-    /** Looks for a suffix on a string and returns
-     * either the string with the suffix removed
-     * or null. */
-    private static String trimOrNull(String s, String suffix) {
-        return s.endsWith(suffix)
-                ? s.substring(0, s.length() - suffix.length())
-                : null;
+        this.tblTplMap = tblTplMap;
+        this.source = source;
     }
 
     @Override protected Map<String, Table> getTableMap() {
@@ -63,20 +45,18 @@ public class JsonSchema extends AbstractSchema {
         // Build a map from table name to table; each file becomes a table.
         final ImmutableMap.Builder<String, Table> builder = ImmutableMap.builder();
 
-        final Table table = createTable(source);
-        builder.put(name, table);
+        for(Map.Entry<String, String> entry: tblTplMap.entrySet()){
+            final Table table = createTable(entry.getValue(), source.getQueue(entry.getKey()));
+            builder.put(entry.getKey(), table);
+        }
+
 
         return builder.build();
     }
 
     /** Creates different sub-type of table based on the "flavor" attribute. */
-    private Table createTable(Queue<String> source) {
-        switch (flavor) {
-            case SCANNABLE:
-                return new JsonScannableTable(source, null);
-            default:
-                throw new AssertionError("Unknown flavor " + this.flavor);
-        }
+    private Table createTable(String tplString, Queue<String> queue) {
+        return new JsonMemoryTable(queue, tplString, null);
     }
 }
 

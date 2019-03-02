@@ -9,10 +9,9 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
-import java.util.LinkedList;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Queue;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author lynn
@@ -23,38 +22,10 @@ import java.util.Queue;
  **/
 public class JsonSchemaTest {
 
-
-    /**
-     *
-     * @param args
-     */
-    public static void main(String[] args) throws Exception {
-
-        Class.forName("org.apache.calcite.jdbc.Driver");
-        Properties info = new Properties();
-        Connection connection =
-                DriverManager.getConnection("jdbc:calcite:caseSensitive=false;lex=MYSQL", info);
-        CalciteConnection calciteConnection =
-                connection.unwrap(CalciteConnection.class);
-        SchemaPlus rootSchema = calciteConnection.getRootSchema();
-
-        Map<String, Object> operand = Maps.newHashMap();
-
-        Queue<String> source = new LinkedList<>();
-        source.offer("{\"clienttoken\":\"token1\",\"state\":{\"status\":\"online\", \"value\":12},\"timestamp\":1551422889}");
-        source.offer("{\"clienttoken\":\"token1\",\"state\":{\"status\":\"online\", \"value\":12},\"timestamp\":1551422889}");
-        source.offer("{\"clienttoken\":\"token1\",\"state\":{\"status\":\"online\", \"value\":12},\"timestamp\":1551422889}");
-        source.offer("{\"clienttoken\":\"token1\",\"state\":{\"status\":\"online\", \"value\":12},\"timestamp\":1551422889}");
-
-        operand.putIfAbsent("source", source);
-        operand.putIfAbsent("name", "SENSOR");
-        operand.putIfAbsent("flavor", null);
-
-        Schema schema = JsonSchemaFactory.INSTANCE.create(rootSchema, "JSON", operand);
-        rootSchema.add("JSON", schema);
-
+    public static void executeQuery(CalciteConnection calciteConnection, String sql) throws Exception {
+        System.out.println(sql);
         Statement statement = calciteConnection.createStatement();
-        ResultSet resultSet = statement.executeQuery("SELECT * FROM JSON.SENSOR");
+        ResultSet resultSet = statement.executeQuery(sql);
 
         if(resultSet != null){
             final StringBuilder buf = new StringBuilder();
@@ -75,6 +46,58 @@ public class JsonSchemaTest {
         }
 
         statement.close();
+    }
+
+    /**
+     *
+     * @param args
+     */
+    public static void main(String[] args) throws Exception {
+
+        Class.forName("org.apache.calcite.jdbc.Driver");
+        Properties info = new Properties();
+        Connection connection =
+                DriverManager.getConnection("jdbc:calcite:caseSensitive=false;lex=MYSQL", info);
+        CalciteConnection calciteConnection =
+                connection.unwrap(CalciteConnection.class);
+        SchemaPlus rootSchema = calciteConnection.getRootSchema();
+
+        Map<String, Object> operand = Maps.newHashMap();
+
+        MemorySource<String> source = new MemorySource<>();
+        source.offer("sensor", "{\"clienttoken\":\"token1\",\"state\":{\"status\":\"online\", \"value\":12},\"timestamp\":1551422889}");
+        source.offer("sensor", "{\"clienttoken\":\"token1\",\"state\":{\"status\":\"online\", \"value\":2},\"timestamp\":1551422889}");
+        source.offer("sensor", "{\"clienttoken\":\"token1\",\"state\":{\"status\":\"online\", \"value\":11},\"timestamp\":1551422889}");
+        source.offer("sensor", "{\"clienttoken\":\"token1\",\"state\":{\"status\":\"online\", \"value\":17},\"timestamp\":1551422889}");
+
+        source.offer("client", "{\"clientid\":\"client-1\", \"clienttoken\":\"token1\"}");
+
+
+        Map<String, String> tblTplMap = Maps.newHashMap();
+        tblTplMap.put("sensor", "{\"clienttoken\":\"token1\",\"state\":{\"status\":\"online\", \"value\":12},\"timestamp\":1551422889}");
+        tblTplMap.put("client", "{\"clientid\":\"client-1\", \"clienttoken\":\"token1\"}");
+
+        operand.putIfAbsent("source", source);
+        operand.putIfAbsent("tbl-tpl", tblTplMap);
+
+        Schema schema = JsonSchemaFactory.INSTANCE.create(rootSchema, "JSON", operand);
+        rootSchema.add("JSON", schema);
+
+
+        executeQuery(calciteConnection,"SELECT * FROM JSON.sensor where state__value > 10");
+
+        executeQuery(calciteConnection,"SELECT * FROM JSON.client");
+
+        TimeUnit.SECONDS.sleep(10);
+        System.out.println("-------insert into table---------");
+        source.offer("sensor", "{\"clienttoken\":\"token2\",\"state\":{\"status\":\"online\", \"value\":26},\"timestamp\":1551424889}");
+
+        source.offer("client", "{\"clientid\":\"client-2\", \"clienttoken\":\"token2\"}");
+
+        executeQuery(calciteConnection, "SELECT * FROM JSON.SENSOR where state__value > 10");
+
+        executeQuery(calciteConnection,"SELECT * FROM JSON.client");
+
         connection.close();
     }
 }

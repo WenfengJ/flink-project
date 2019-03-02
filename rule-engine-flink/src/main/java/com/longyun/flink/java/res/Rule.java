@@ -1,7 +1,12 @@
 package com.longyun.flink.java.res;
 
 
+import org.apache.calcite.jdbc.CalciteConnection;
+
 import java.io.Serializable;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.util.Properties;
 
 /**
  * @author yuanxiaolong
@@ -19,7 +24,6 @@ public class Rule implements Serializable {
     private String ruleSQL;
 
     private String templateRow;
-
 
     public String getId() {
         return id;
@@ -80,7 +84,7 @@ public class Rule implements Serializable {
                 "id='" + id + '\'' +
                 ", topicPattern='" + topicPattern + '\'' +
                 ", ruleSQL='" + ruleSQL + '\'' +
-                ", templateRow=" + templateRow +
+                ", templateRow='" + templateRow + '\'' +
                 '}';
     }
 }

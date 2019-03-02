@@ -22,13 +22,15 @@ import java.util.Queue;
  **/
 public abstract class JsonTable extends AbstractTable {
 
-    protected final Queue<String> source;
+    protected final Queue<String> queue;
+    protected final String tplString;
     protected final RelProtoDataType protoRowType;
     protected Map<String, JsonFieldType> fieldTypes;
     protected String[] fieldNames;
 
-    public JsonTable(Queue<String> source, RelProtoDataType protoRowType) {
-        this.source = source;
+    public JsonTable(Queue<String> queue, String tplString, RelProtoDataType protoRowType) {
+        this.queue = queue;
+        this.tplString = tplString;
         this.protoRowType = protoRowType;
     }
 
@@ -45,19 +47,13 @@ public abstract class JsonTable extends AbstractTable {
 
         List<String> names = new ArrayList<>();
 
-        RelDataType relDataType = JsonEnumerator.deduceRowType((JavaTypeFactory) typeFactory, source,
+        RelDataType relDataType = JsonEnumerator.deduceRowType((JavaTypeFactory) typeFactory, tplString,
                 fieldTypes, names);
 
         if(names.size() > 0)
             fieldNames = names.toArray(new String[0]);
 
         return relDataType;
-    }
-
-    /** Various degrees of table "intelligence". */
-    public enum Flavor {
-        SCANNABLE
-//        , FILTERABLE, TRANSLATABLE
     }
 }
 

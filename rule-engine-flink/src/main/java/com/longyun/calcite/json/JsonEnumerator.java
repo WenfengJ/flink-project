@@ -7,14 +7,11 @@ import org.apache.calcite.linq4j.Enumerator;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.Pair;
-import org.apache.calcite.util.Source;
 import org.apache.commons.lang3.time.FastDateFormat;
 
 import java.io.IOException;
-import java.io.Reader;
 import java.text.ParseException;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * @author lynn
@@ -23,7 +20,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @Date 19-2-27 下午1:58
  * @Version 1.0
  **/
-public class JsonEnumerator<E> implements Enumerator<E> {
+public class JsonEnumerator<E> implements Enumerator<E>{
 
     private final JsonReader reader;
     private final RowConverter<E> rowConverter;
@@ -61,7 +58,6 @@ public class JsonEnumerator<E> implements Enumerator<E> {
 
     @Override
     public boolean moveNext() {
-
         final JsonNode node = reader.readNext();
         if(node != null){
             current = rowConverter.convertRow(node);
@@ -96,11 +92,12 @@ public class JsonEnumerator<E> implements Enumerator<E> {
 
     /** Deduces the names and types of a table's columns by reading the first line
      * of a JSON file. */
-    static RelDataType deduceRowType(JavaTypeFactory typeFactory,  Queue<String> source,
+    static RelDataType deduceRowType(JavaTypeFactory typeFactory, String tplString,
                                      Map<String, JsonFieldType> fieldTypes, List<String> names) {
         final List<RelDataType> types = new ArrayList<>();
-        try (JsonReader reader = new JsonReader(source)) {
-            String[] strings = reader.readFieldTypes();
+
+        try (JsonTplParser parser = new JsonTplParser(tplString)) {
+            String[] strings = parser.readFieldTypes();
             if (strings == null) {
                 strings = new String[]{"EmptyFileHasNoColumns:boolean"};
             }
@@ -141,9 +138,9 @@ public class JsonEnumerator<E> implements Enumerator<E> {
             names.add("line");
             types.add(typeFactory.createSqlType(SqlTypeName.VARCHAR));
         }
+
         return typeFactory.createStructType(Pair.zip(names, types));
     }
-
 
     /** Row converter.
      *
@@ -267,8 +264,8 @@ public class JsonEnumerator<E> implements Enumerator<E> {
             final Object[] objects = new Object[fieldNames.length];
 
             for (int i = 0; i < fieldNames.length; i++) {
-                if(fieldNames[i].contains(JsonReader.DEFAULT_LAYER_SPEARATOR)){
-                    String[] tokens = fieldNames[i].split(JsonReader.DEFAULT_LAYER_SPEARATOR);
+                if(fieldNames[i].contains(JsonTplParser.DEFAULT_LAYER_SPEARATOR)){
+                    String[] tokens = fieldNames[i].split(JsonTplParser.DEFAULT_LAYER_SPEARATOR);
                     JsonNode currentNode = node;
                     for (int j = 0; j < tokens.length; j++){
                         currentNode = currentNode.get(tokens[j]);
@@ -286,8 +283,8 @@ public class JsonEnumerator<E> implements Enumerator<E> {
 
             objects[0] = System.currentTimeMillis();
             for (int i = 0; i < fieldNames.length; i++) {
-                if(fieldNames[i].contains(JsonReader.DEFAULT_LAYER_SPEARATOR)){
-                    String[] tokens = fieldNames[i].split(JsonReader.DEFAULT_LAYER_SPEARATOR);
+                if(fieldNames[i].contains(JsonTplParser.DEFAULT_LAYER_SPEARATOR)){
+                    String[] tokens = fieldNames[i].split(JsonTplParser.DEFAULT_LAYER_SPEARATOR);
                     JsonNode currentNode = node;
                     for (int j = 0; j < tokens.length; j++){
                         currentNode = currentNode.get(tokens[j]);
