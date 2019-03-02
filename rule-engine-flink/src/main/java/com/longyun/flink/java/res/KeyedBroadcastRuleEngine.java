@@ -2,6 +2,13 @@ package com.longyun.flink.java.res;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.Maps;
+import com.longyun.calcite.json.JsonSchemaFactory;
+import com.longyun.calcite.json.MemorySource;
+import com.longyun.flink.java.nc.NetCatRuleEngine;
+import org.apache.calcite.jdbc.CalciteConnection;
+import org.apache.calcite.schema.Schema;
+import org.apache.calcite.schema.SchemaPlus;
 import org.apache.flink.api.common.JobExecutionResult;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.common.state.BroadcastState;
@@ -17,6 +24,11 @@ import org.apache.flink.streaming.api.functions.sink.PrintSinkFunction;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer011;
 import org.apache.flink.util.Collector;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -33,7 +45,7 @@ public class KeyedBroadcastRuleEngine {
     final static String brokers = "res-spark-0001:9092,res-spark-0002:9092,res-spark-0003:9092";
 
 
-    final static String templateRow = "{\"clienttoken\":\"token1\",\"state\":{\"status\":\"online\", \"value\":12},\"timestamp\"：1551422889}";
+    final static String templateRow = "{\"clienttoken\":\"token1\",\"state\":{\"status\":\"online\", \"value\":12},\"timestamp\":1551422889}";
 
     /**
      *
@@ -53,7 +65,7 @@ public class KeyedBroadcastRuleEngine {
         properties.setProperty("session.timeout.ms", "30000");
 
         final String sql = "SELECT clienttoken, state__status, state__value, `timestamp`"
-                + " from tb_raw";
+                + " from JSON.sensor";
 
         System.out.println(sql);
 
@@ -61,14 +73,14 @@ public class KeyedBroadcastRuleEngine {
                     new Rule()
                         .withId("1")
                         .withTopicPattern("1")
-                        .withRuleSQL(sql+ " WHERE v > 10")
+                        .withRuleSQL(sql+ " WHERE state__value > 10")
                         .withTemplateRow(templateRow),
 
                     new Rule()
                         .withId("2")
                         .withTopicPattern("2")
                         .withTemplateRow(templateRow)
-                        .withRuleSQL(sql+ " where v > 20")
+                        .withRuleSQL(sql+ " where state__value > 20")
         );
         //定义广播规则描述
         // a map descriptor to store the name of the rule (string) and the rule itself.
@@ -106,54 +118,132 @@ public class KeyedBroadcastRuleEngine {
 //        keyedStream.addSink(new PrintSinkFunction<>());
 
         DataStream<RuleRaw> rrDataStream = keyedStream.connect(ruleBroadcastStream)
-               .process(new KeyedBroadcastProcessFunction<String, Raw, Rule, RuleRaw>() {
-
-                   @Override
-                   public void processBroadcastElement(Rule value, Context ctx, Collector<RuleRaw> out) throws Exception {
-                       //更新配置的规则
-                        BroadcastState<String, Rule> state = ctx.getBroadcastState(ruleStateDescriptor);
-                        state.put(value.getId(), value);
-                   }
-
-                   @Override
-                   public void processElement(Raw value, ReadOnlyContext ctx, Collector<RuleRaw> out) throws Exception {
-//                       this.getRuntimeContext().getMap
-                       ReadOnlyBroadcastState<String, Rule> state = ctx.getBroadcastState(ruleStateDescriptor);
-                       state.immutableEntries().forEach(entry -> {
-                           Rule rule = entry.getValue();
-                           //匹配规则
-                           if(value.getKey().equals(rule.getTopicPattern())){
-//                               out.collect(new RuleRaw().withRule(rule.getRuleSQL()).withRaw(value.getRaw()));
-                               out.collect(new RuleRaw().withRule(rule.getId()).withRaw(value.getRaw()));
-                           }
-                       });
-                   }
-               });
+               .process(new RuleProcessFunction());
 
         rrDataStream.addSink(new PrintSinkFunction<>());
-        /*
-        tableEnv.registerDataStream("tb_rule_raw", rrDataStream, "rule, raw");
-
-        Table table = tableEnv.sqlQuery("select * from tb_rule_raw");
-
-        CsvTableSink sink = new CsvTableSink(
-                dstPath,
-                "|",
-                1,
-                FileSystem.WriteMode.OVERWRITE);
-
-        tableEnv.registerTableSink("csvOutputTable",
-            new String[]{"f0", "f1"},
-            new TypeInformation[]{Types.STRING(), Types.STRING()},
-            sink
-        );
-
-        table.insertInto("csvOutputTable");
-*/
 
 
         JobExecutionResult result = env.execute("blink-broadcast-table");
 
         System.out.println(result.getAllAccumulatorResults());
+    }
+
+    static class CalciteSchema{
+        CalciteConnection connection;
+        MemorySource<String> source;
+
+        protected CalciteSchema(CalciteConnection connection, MemorySource<String> source) {
+            this.connection = connection;
+            this.source = source;
+        }
+    }
+
+    static class RuleProcessFunction extends KeyedBroadcastProcessFunction<String, Raw, Rule, RuleRaw>{
+
+        //rule.id -> connection
+        private final Map<String, CalciteSchema> calciteSchemaMap;
+        private static final MapStateDescriptor<String, Rule> ruleStateDescriptor = new MapStateDescriptor<>(
+                "RulesBroadcastState",
+                BasicTypeInfo.STRING_TYPE_INFO,
+                TypeInformation.of(new TypeHint<Rule>() {}));
+        public RuleProcessFunction() {
+            this(Maps.newHashMap());
+        }
+
+        public RuleProcessFunction(Map<String, CalciteSchema> calciteSchemaMap) {
+            this.calciteSchemaMap = calciteSchemaMap;
+        }
+
+        @Override
+        public void processBroadcastElement(Rule value, Context ctx, Collector<RuleRaw> out) throws Exception {
+            //更新配置的规则
+            BroadcastState<String, Rule> state = ctx.getBroadcastState(ruleStateDescriptor);
+            state.put(value.getId(), value);
+        }
+
+        @Override
+        public void processElement(Raw value, ReadOnlyContext ctx, Collector<RuleRaw> out) throws Exception {
+            System.out.println(value.getRaw());
+            ReadOnlyBroadcastState<String, Rule> state = ctx.getBroadcastState(ruleStateDescriptor);
+            state.immutableEntries().forEach(entry -> {
+                Rule rule = entry.getValue();
+                //匹配规则
+                if(value.getKey().equals(rule.getTopicPattern())){
+                    CalciteSchema schema = getCalciteSchema(rule);
+                    schema.source.offer("sensor", value.getRaw());
+                    try{
+                        Statement statement = schema.connection.createStatement();
+                        ResultSet resultSet = statement.executeQuery(rule.getRuleSQL());
+
+                        if(resultSet != null){
+                            final StringBuilder buf = new StringBuilder();
+                            while (resultSet.next()) {
+                                int n = resultSet.getMetaData().getColumnCount();
+                                for (int i = 1; i <= n; i++) {
+                                    buf.append(i > 1 ? "; " : "")
+                                            .append(resultSet.getMetaData().getColumnLabel(i))
+                                            .append("\t")
+                                            .append(resultSet.getObject(i));
+                                }
+                                out.collect(new RuleRaw().withRule(rule.getId()).withRaw(buf.toString()));
+                                buf.setLength(0);
+                            }
+                            resultSet.close();
+                        }else {
+                            System.err.println("resultSet is null!");
+                        }
+
+                        statement.close();
+                    }catch (Exception e){
+                        e.printStackTrace();
+                    }
+                }
+            });
+        }
+
+        /**
+         *
+         * @param
+         * @return
+         */
+        private CalciteSchema getCalciteSchema(Rule rule){
+            System.out.println("------------getCalciteSchema------------");
+            if(this.calciteSchemaMap.containsKey(rule.getId())){
+                return calciteSchemaMap.get(rule.getId());
+            }else{
+                System.out.println("------------create net connection------------");
+                try {
+                    Class.forName("org.apache.calcite.jdbc.Driver");
+                    Properties info = new Properties();
+                    Connection connection =
+                            DriverManager.getConnection("jdbc:calcite:caseSensitive=false;lex=MYSQL", info);
+                    CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class);
+
+                    SchemaPlus rootSchema = calciteConnection.getRootSchema();
+
+                    Map<String, Object> operand = Maps.newHashMap();
+
+                    MemorySource<String> source = new MemorySource<>();
+
+                    Map<String, String> tblTplMap = Maps.newHashMap();
+                    tblTplMap.put("sensor", rule.getTemplateRow());
+
+                    operand.putIfAbsent("source", source);
+                    operand.putIfAbsent("tbl-tpl", tblTplMap);
+
+                    Schema schema = JsonSchemaFactory.INSTANCE.create(rootSchema, "JSON", operand);
+                    rootSchema.add("JSON", schema);
+
+                    CalciteSchema calciteSchema = new CalciteSchema(calciteConnection, source);
+                    this.calciteSchemaMap.put(rule.getId(), calciteSchema);
+
+                    return calciteSchema;
+                }catch (Exception e){
+                    e.printStackTrace();
+                }
+
+                return null;
+            }
+        }
     }
 }

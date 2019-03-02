@@ -75,14 +75,14 @@ public class NetCatRuleEngine {
                     new Rule()
                         .withId("1")
                         .withTopicPattern("1")
-                        .withRuleSQL(sql+ " WHERE v > 10")
+                        .withRuleSQL(sql+ " WHERE state__value > 10")
                         .withTemplateRow(templateRow),
 
                     new Rule()
                         .withId("2")
                         .withTopicPattern("2")
                         .withTemplateRow(templateRow)
-                        .withRuleSQL(sql+ " where v > 20")
+                        .withRuleSQL(sql+ " where state__value > 20")
         );
         //定义广播规则描述
         // a map descriptor to store the name of the rule (string) and the rule itself.
@@ -109,11 +109,7 @@ public class NetCatRuleEngine {
                         return Raw.of("", raw);
                     }
                 }).filter(t -> !"".equals(t.getKey()))
-//                .returns(new TypeHint<Raw>(){})
-//                .addSink(new PrintSinkFunction<Raw>());
                    .keyBy(raw -> raw.getKey());
-//
-//        keyedStream.addSink(new PrintSinkFunction<>());
 
         DataStream<RuleRaw> rrDataStream = keyedStream.connect(ruleBroadcastStream)
                .process(new RuleProcessFunction());
@@ -161,16 +157,16 @@ public class NetCatRuleEngine {
 
         @Override
         public void processElement(Raw value, ReadOnlyContext ctx, Collector<RuleRaw> out) throws Exception {
+            System.out.println(value.getRaw());
             ReadOnlyBroadcastState<String, Rule> state = ctx.getBroadcastState(ruleStateDescriptor);
             state.immutableEntries().forEach(entry -> {
                 Rule rule = entry.getValue();
                 //匹配规则
                 if(value.getKey().equals(rule.getTopicPattern())){
-
                     CalciteSchema schema = getCalciteSchema(rule);
                     schema.source.offer("sensor", value.getRaw());
                     try{Statement statement = schema.connection.createStatement();
-                        ResultSet resultSet = statement.executeQuery("SELECT * FROM JSON.SENSOR");
+                        ResultSet resultSet = statement.executeQuery(rule.getRuleSQL());
 
                         if(resultSet != null){
                             final StringBuilder buf = new StringBuilder();
@@ -204,9 +200,11 @@ public class NetCatRuleEngine {
          * @return
          */
         private CalciteSchema getCalciteSchema(Rule rule){
+            System.out.println("------------getCalciteSchema------------");
             if(this.calciteSchemaMap.containsKey(rule.getId())){
                 return calciteSchemaMap.get(rule.getId());
             }else{
+                System.out.println("------------create net connection------------");
                 try {
                     Class.forName("org.apache.calcite.jdbc.Driver");
                     Properties info = new Properties();
