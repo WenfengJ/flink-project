@@ -10,6 +10,7 @@ import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.flink.api.common.JobExecutionResult;
+import org.apache.flink.api.common.serialization.SimpleStringEncoder;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.common.state.BroadcastState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
@@ -17,10 +18,13 @@ import org.apache.flink.api.common.state.ReadOnlyBroadcastState;
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
 import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.java.utils.ParameterTool;
+import org.apache.flink.core.fs.Path;
 import org.apache.flink.streaming.api.datastream.*;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.co.KeyedBroadcastProcessFunction;
 import org.apache.flink.streaming.api.functions.sink.PrintSinkFunction;
+import org.apache.flink.streaming.api.functions.sink.filesystem.StreamingFileSink;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer011;
 import org.apache.flink.util.Collector;
 
@@ -28,6 +32,8 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -52,36 +58,39 @@ public class KeyedBroadcastRuleEngine {
      * @param args
      */
     public static void main(String[] args) throws Exception{
-        System.out.println(templateRow);
+        if(null == args || args.length==0){
+            System.err.println("Please input parameters...");
+            System.exit(-1);
+        }
+        ParameterTool tool = ParameterTool.fromArgs(args);
+
+        Properties paraProps = tool.getProperties();
+
+//        System.out.println(templateRow);
         // set up the streaming execution environment
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-        env.setParallelism(1);
-
+//        env.setParallelism(1);
 
         final Properties properties = new Properties();
         properties.setProperty("bootstrap.servers", brokers);
-        properties.setProperty("group.id", "bc-flink");
+        properties.setProperty("group.id", paraProps.getProperty("group.id"));
         properties.setProperty("session.timeout.ms", "30000");
 
         final String sql = "SELECT clienttoken, state__status, state__value, `timestamp`"
                 + " from JSON.sensor";
 
-        System.out.println(sql);
+//        System.out.println(sql);
 
-        DataStreamSource<Rule> ruleStream = env.fromElements(
-                    new Rule()
-                        .withId("1")
-                        .withTopicPattern("1")
-                        .withRuleSQL(sql+ " WHERE state__value > 10")
-                        .withTemplateRow(templateRow),
-
-                    new Rule()
-                        .withId("2")
-                        .withTopicPattern("2")
-                        .withTemplateRow(templateRow)
-                        .withRuleSQL(sql+ " where state__value > 20")
-        );
+        List<Rule> rules = new ArrayList<>();
+        for (int i = 0; i < Integer.parseInt(paraProps.getProperty("rules.num")); i++) {
+            rules.add(new Rule()
+                    .withId(""+i)
+                    .withTopicPattern(""+i)
+                    .withRuleSQL(sql+ " WHERE state__value > "+i)
+                    .withTemplateRow(templateRow));
+        }
+        DataStreamSource<Rule> ruleStream = env.fromCollection(rules);
         //定义广播规则描述
         // a map descriptor to store the name of the rule (string) and the rule itself.
         MapStateDescriptor<String, Rule> ruleStateDescriptor = new MapStateDescriptor<>(
@@ -94,8 +103,8 @@ public class KeyedBroadcastRuleEngine {
 
         //add source
         FlinkKafkaConsumer011<String> consumer = new FlinkKafkaConsumer011<>("iot-src", new SimpleStringSchema(), properties);
-        consumer.setStartFromEarliest();
-//        consumer.setStartFromLatest();
+//        consumer.setStartFromEarliest();
+        consumer.setStartFromLatest();
 
         DataStreamSource<String> stream = env.addSource(consumer);
 
@@ -122,10 +131,12 @@ public class KeyedBroadcastRuleEngine {
 
         rrDataStream.addSink(new PrintSinkFunction<>());
 
+        rrDataStream.addSink(StreamingFileSink.forRowFormat(new Path(paraProps.getProperty("fs.sink.path")), new SimpleStringEncoder()).build());
+
 
         JobExecutionResult result = env.execute("blink-broadcast-table");
 
-        System.out.println(result.getAllAccumulatorResults());
+        System.out.println("AllAccumulatorResults" + result.getAllAccumulatorResults());
     }
 
     static class CalciteSchema{
@@ -163,7 +174,7 @@ public class KeyedBroadcastRuleEngine {
 
         @Override
         public void processElement(Raw value, ReadOnlyContext ctx, Collector<RuleRaw> out) throws Exception {
-            System.out.println(value.getRaw());
+//            System.out.println(value.getRaw());
             ReadOnlyBroadcastState<String, Rule> state = ctx.getBroadcastState(ruleStateDescriptor);
             state.immutableEntries().forEach(entry -> {
                 Rule rule = entry.getValue();
@@ -207,11 +218,11 @@ public class KeyedBroadcastRuleEngine {
          * @return
          */
         private CalciteSchema getCalciteSchema(Rule rule){
-            System.out.println("------------getCalciteSchema------------");
+//            System.out.println("------------getCalciteSchema------------");
             if(this.calciteSchemaMap.containsKey(rule.getId())){
                 return calciteSchemaMap.get(rule.getId());
             }else{
-                System.out.println("------------create net connection------------");
+//                System.out.println("------------create net connection------------");
                 try {
                     Class.forName("org.apache.calcite.jdbc.Driver");
                     Properties info = new Properties();
