@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
 import com.longyun.calcite.json.JsonSchemaFactory;
 import com.longyun.calcite.json.MemorySource;
-import com.longyun.flink.java.nc.NetCatRuleEngine;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
