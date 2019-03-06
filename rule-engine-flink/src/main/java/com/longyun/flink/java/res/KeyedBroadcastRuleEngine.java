@@ -9,7 +9,6 @@ import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.flink.api.common.JobExecutionResult;
-import org.apache.flink.api.common.serialization.SimpleStringEncoder;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.common.state.BroadcastState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
@@ -18,12 +17,9 @@ import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
 import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.utils.ParameterTool;
-import org.apache.flink.core.fs.Path;
 import org.apache.flink.streaming.api.datastream.*;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.co.KeyedBroadcastProcessFunction;
-import org.apache.flink.streaming.api.functions.sink.PrintSinkFunction;
-import org.apache.flink.streaming.api.functions.sink.filesystem.StreamingFileSink;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer011;
 import org.apache.flink.util.Collector;
 
@@ -31,10 +27,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 
 /**
  * @author yuanxiaolong
@@ -45,7 +38,7 @@ import java.util.Properties;
  **/
 public class KeyedBroadcastRuleEngine {
 
-    final static String  dstPath = "/tmp/flink-sinks/flat-json.csv";
+//    final static String  dstPath = "/tmp/flink-sinks/flat-json.csv";
 
     final static String brokers = "res-spark-0001:9092,res-spark-0002:9092,res-spark-0003:9092";
 
@@ -80,14 +73,15 @@ public class KeyedBroadcastRuleEngine {
                 + " from JSON.sensor";
 
 //        System.out.println(sql);
-
-        List<Rule> rules = new ArrayList<>();
+        final List<Rule> rules = new LinkedList<>();
         for (int i = 0; i < Integer.parseInt(paraProps.getProperty("rules.num")); i++) {
             rules.add(new Rule()
                     .withId(""+i)
                     .withTopicPattern(""+i)
                     .withRuleSQL(sql+ " WHERE state__value > "+i)
                     .withTemplateRow(templateRow));
+//                    .withOutputTag(new OutputTag<RuleRaw>("tag"+i){}));
+
         }
         DataStreamSource<Rule> ruleStream = env.fromCollection(rules);
         //定义广播规则描述
@@ -128,9 +122,14 @@ public class KeyedBroadcastRuleEngine {
         DataStream<RuleRaw> rrDataStream = keyedStream.connect(ruleBroadcastStream)
                .process(new RuleProcessFunction());
 
-        rrDataStream.addSink(new PrintSinkFunction<>());
+        /*rules.forEach(rule -> {
+            DataStream<RuleRaw> ds = ((SingleOutputStreamOperator<RuleRaw>) rrDataStream).getSideOutput(rule.getOutputTag());
+            ds.addSink(new PrintSinkFunction<>());
+        });*/
 
-        rrDataStream.addSink(StreamingFileSink.forRowFormat(new Path(paraProps.getProperty("fs.sink.path")), new SimpleStringEncoder()).build());
+
+//        rrDataStream.addSink(new PrintSinkFunction<>());
+//        rrDataStream.addSink(StreamingFileSink.forRowFormat(new Path(paraProps.getProperty("fs.sink.path")), new SimpleStringEncoder()).build());
 
 
         JobExecutionResult result = env.execute("blink-broadcast-table");
@@ -195,7 +194,12 @@ public class KeyedBroadcastRuleEngine {
                                             .append("\t")
                                             .append(resultSet.getObject(i));
                                 }
+                                // emit data to regular output
                                 out.collect(new RuleRaw().withRule(rule.getId()).withRaw(buf.toString()));
+
+                                // emit data to side output
+//                                ctx.output(rule.getOutputTag(), new RuleRaw().withRule(rule.getId()).withRaw(buf.toString()));
+
                                 buf.setLength(0);
                             }
                             resultSet.close();

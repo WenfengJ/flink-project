@@ -1,12 +1,10 @@
 package com.longyun.flink.java.res;
 
 
-import org.apache.calcite.jdbc.CalciteConnection;
+import org.apache.flink.util.OutputTag;
 
 import java.io.Serializable;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.util.Properties;
+import java.util.Objects;
 
 /**
  * @author yuanxiaolong
@@ -15,7 +13,7 @@ import java.util.Properties;
  * @Date 2019/2/26 11:31
  * @Version 1.0
  **/
-public class Rule implements Serializable {
+public class Rule<Tag> implements Serializable {
 
     private String id;
 
@@ -24,6 +22,8 @@ public class Rule implements Serializable {
     private String ruleSQL;
 
     private String templateRow;
+
+    private OutputTag<Tag> outputTag;
 
     public String getId() {
         return id;
@@ -58,6 +58,14 @@ public class Rule implements Serializable {
         this.templateRow = templateRow;
     }
 
+    public OutputTag<Tag> getOutputTag() {
+        return outputTag;
+    }
+
+    public void setOutputTag(OutputTag<Tag> outputTag) {
+        this.outputTag = outputTag;
+    }
+
     public Rule withId(String id) {
         this.setId(id);
         return this;
@@ -76,6 +84,24 @@ public class Rule implements Serializable {
     public Rule withTemplateRow(String templateRow){
         this.setTemplateRow(templateRow);
         return this;
+    }
+
+    public Rule withOutputTag(OutputTag<Tag> outputTag){
+        this.setOutputTag(outputTag);
+        return this;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Rule<?> rule = (Rule<?>) o;
+        return Objects.equals(id, rule.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
     }
 
     @Override
