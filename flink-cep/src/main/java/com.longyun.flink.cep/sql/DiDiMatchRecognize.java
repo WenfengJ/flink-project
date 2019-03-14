@@ -1,6 +1,5 @@
 package com.longyun.flink.cep.sql;
 
-import com.sun.xml.internal.fastinfoset.tools.PrintTable;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.DataSet;
 import org.apache.flink.api.java.ExecutionEnvironment;
