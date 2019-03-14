@@ -1,5 +1,6 @@
 package com.longyun.flink.cep.sql;
 
+import com.longyun.flink.cep.LoginEvent;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.streaming.api.TimeCharacteristic;
@@ -10,11 +11,9 @@ import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.Types;
 import org.apache.flink.table.api.java.StreamTableEnvironment;
 import org.apache.flink.table.sinks.CsvTableSink;
+import org.apache.flink.table.sinks.PrintTableSink;
 
 import java.util.Arrays;
-
-import com.longyun.flink.cep.LoginEvent;
-import org.apache.flink.table.sinks.PrintTableSink;
 
 /**
  * @author lynn
