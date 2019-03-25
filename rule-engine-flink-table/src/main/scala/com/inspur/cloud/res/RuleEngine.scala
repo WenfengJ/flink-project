@@ -1,11 +1,14 @@
 package com.inspur.cloud.res
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.core.fs.FileSystem.WriteMode
 import org.apache.flink.streaming.api.scala._
 import org.apache.flink.table.api.{TableEnvironment, Types}
 import org.apache.flink.table.descriptors.{Csv, Json, Kafka, Schema}
-import org.apache.flink.table.sinks.CsvTableSink
+import org.apache.flink.table.sinks.{CsvTableSink, PrintTableSink}
+
+import scala.collection.mutable.ArrayBuffer
 
 /**
   * Skeleton for a Flink Streaming Job.
@@ -25,9 +28,6 @@ object RuleEngine {
 
   val sourceTopic = "iot-src"
 
-  val dstPath = "/tmp/flink-sinks/flat-json1.csv"
-  val dstPath2 = "/tmp/flink-sinks/flat-json2.csv"
-
   /**
     *
     * @param args
@@ -36,77 +36,48 @@ object RuleEngine {
 
     // set up the streaming execution environment
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setParallelism(1)
     //启用checkpoint
-    env.enableCheckpointing(5000)
+//    env.enableCheckpointing(5000)
 
-//    val template: String = "{\"state\": {\"reported\": {\"temperature\": 73.09}},\"clientToken\": \"client-27\",\"timestamp\": 1533709399480}"
-    val template: String = "{\"state\": \"online\",\"clientToken\": \"client-27\",\"timestamp\": 1533709399480}"
-
-//    val option = scala.util.parsing.json.JSON.parseFull(template)
-//    println(option.get.getClass)
-    //    scala.util.parsing.json.JSONObject.apply((Map)(option.getOr))
-
-    val json = com.alibaba.fastjson.JSON.parseObject(template)
-
-    val keys = json.keySet()
-    val fields = new Array[String](keys.size())
-    keys.toArray(fields)
-
-    // get StreamTableEnvironment
-    // registration of a DataSet in a BatchTableEnvironment is equivalent
+//    val template: String = "{\"state\": \"online\",\"clienttoken\": \"client-27\",\"timestamp\": 1533709399480}"
     val tableEnv = TableEnvironment.getTableEnvironment(env)
 
-    val descriptor = new Kafka().version("0.10")
+    val descriptor = new Kafka().version("0.11")
         .topic(sourceTopic)
         .startFromEarliest()
+
 //        .startFromLatest()
         .property("bootstrap.servers", brokers)
         .property("group.id", "res")
         .property("session.timeout.ms", "30000")
-//        .property("flink.partition-discovery.interval-millis", "30000") //Partition discovery
-
-    val typeInformations = Array[TypeInformation[_]](Types.STRING, Types.STRING, Types.SQL_TIMESTAMP)
-
-    val schema = new Schema()
-    for(i<-0 until fields.length){
-      schema.field(fields(i), typeInformations(i))
-    }
+        .sinkPartitionerFixed()
 
     val tableDescriptor = tableEnv.connect(descriptor)
-      .withFormat(new Json().deriveSchema())
-      .withSchema(schema)
+      .withFormat(new Json()
+        .failOnMissingField(false)
+        .deriveSchema())
+      .withSchema(new Schema()
+        .field("clienttoken", Types.STRING)
+        .field("timestamp", Types.LONG)
+        .field("state", Types.ROW(Array[String]("status", "value"), Array[TypeInformation[_]](Types.STRING, Types.INT)))
+//          .field("state", Types.STRING)
+      )
       .inAppendMode().registerTableSource("sensor")
-    val table = tableEnv.sqlQuery("select * from sensor")
+    val table = tableEnv.sqlQuery("select clienttoken, `timestamp`, state from sensor where `value` is not null")
 
     println("--------------------table sensor schema--------------------")
     table.printSchema()
 
-    val sink: CsvTableSink = new CsvTableSink(
-      dstPath,                             // output path
-      fieldDelim = "|",                 // optional: delimit files by '|'
-      numFiles = 1,                     // optional: write to a single file
-      writeMode = WriteMode.OVERWRITE)  // optional: override existing files
 
-    tableEnv.registerTableSink("csvOutputTable",
+    tableEnv.registerTableSink("console",
       Array[String]("f0", "f1", "f2"),
-      Array[TypeInformation[_]](Types.STRING, Types.STRING, Types.SQL_TIMESTAMP),
-      sink
+      Array[TypeInformation[_]](Types.STRING,Types.LONG, Types.ROW(Types.STRING, Types.INT)),
+      new PrintTableSink
     )
 
-    tableEnv.registerTableSink("csvOutputTable2",
-      Array[String]("f0", "f1"),
-      Array[TypeInformation[_]](Types.STRING, Types.STRING),
-      new CsvTableSink(
-        dstPath2,                             // output path
-        fieldDelim = "|",                 // optional: delimit files by '|'
-        numFiles = 1,                     // optional: write to a single file
-        writeMode = WriteMode.OVERWRITE)  // optional: override existing files
-    )
+    table.insertInto("console")
 
-    table.insertInto("csvOutputTable")
-
-    val table2 = tableEnv.sqlQuery("select clientToken, state from sensor")
-    table2.insertInto("csvOutputTable2")
     // execute program
     env.execute("Flink Rule Engine Application")
   }

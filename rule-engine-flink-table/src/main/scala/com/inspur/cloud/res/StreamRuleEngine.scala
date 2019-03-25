@@ -20,12 +20,12 @@ package com.inspur.cloud.res
 
 import java.util.Properties
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.flink.api.common.serialization.SimpleStringSchema
 import org.apache.flink.streaming.api.scala._
 import org.apache.flink.table.api.TableEnvironment
 
 import scala.collection.mutable.ArrayBuffer
-import scala.util.parsing.json.JSONObject
 
 /**
  * Skeleton for a Flink Streaming Job.
@@ -39,7 +39,7 @@ import scala.util.parsing.json.JSONObject
  * If you change the name of the main class (with the public static void main(String[] args))
  * method, change the respective entry in the POM.xml file (simply search for 'mainClass').
  */
-object RuleEngineOld {
+object StreamRuleEngine {
 
   val brokers = "res-spark-0001:9092,res-spark-0002:9092,res-spark-0003:9092"
 
@@ -55,18 +55,11 @@ object RuleEngineOld {
     properties.setProperty("bootstrap.servers", brokers)
     properties.setProperty("group.id", "flink")
     properties.setProperty("session.timeout.ms", "30000")
-//    properties.setProperty("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
-//    properties.setProperty("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
-
-    //Partition discovery
-    properties.put("flink.partition-discovery.interval-millis", "30000")
 
     // set up the streaming execution environment
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     //启用checkpoint
     env.enableCheckpointing(5000)
-
-//    val template: String = "{\"state\": {\"reported\": {\"temperature\": 73.09}},\"clientToken\": \"client-27\",\"timeStamp\": 1533709399480}"
 
     val template: String = "{\"state\": \"online\",\"clientToken\": \"client-27\",\"timestamp\": 1533709399480, \"ruleId\":\"0\"}"
 
@@ -74,11 +67,16 @@ object RuleEngineOld {
     println(option.get.getClass)
 //    scala.util.parsing.json.JSONObject.apply((Map)(option.getOr))
 
-    val json = com.alibaba.fastjson.JSON.parseObject(template)
+    val mapper = new ObjectMapper()
 
-    val keys = json.keySet()
-    val fields = new Array[String](keys.size())
-    keys.toArray(fields)
+    val json = mapper.readTree(template)
+
+    val keys = json.fieldNames()
+    val fields = new ArrayBuffer[String]()
+
+    while (keys hasNext){
+      fields.+=(keys.next())
+    }
 
     // get StreamTableEnvironment
     // registration of a DataSet in a BatchTableEnvironment is equivalent
@@ -87,16 +85,14 @@ object RuleEngineOld {
     import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer010
     val stream: DataStream[String] = env.addSource(
       new FlinkKafkaConsumer010[String](sourceTopic,
-        new SimpleStringSchema(), properties)).map(msg => {
-      val json = com.alibaba.fastjson.JSON.parseObject(msg)
-      json.toJSONString
-    })
+        new SimpleStringSchema(), properties))
 
     val s2 = stream.map(msg => {
-      val json = com.alibaba.fastjson.JSON.parseObject(msg)
+      val mapper = new ObjectMapper()
+      val tree = mapper.readTree(msg)
       val values = new ArrayBuffer[Any](fields.length)
       for(i<- 0 until fields.length){
-        values(i) = json.get(fields(i))
+        values(i) = tree.get(fields(i)).asText()
       }
       values
     })
