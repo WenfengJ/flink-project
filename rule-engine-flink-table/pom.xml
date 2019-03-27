@@ -23,7 +23,7 @@ under the License.
 
 	<groupId>com.inspur.cloud</groupId>
 	<artifactId>rule-engine-flink-table</artifactId>
-	<version>1.0-SNAPSHOT</version>
+	<version>1.0.1-SNAPSHOT</version>
 	<packaging>jar</packaging>
 
 	<name>Flink Rule-Engine-Table Job</name>
@@ -91,17 +91,18 @@ under the License.
 			<version>${flink.version}</version>
 		</dependency>
 
-		<!-- https://mvnrepository.com/artifact/org.apache.flink/flink-json -->
 		<dependency>
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-json</artifactId>
 			<version>${flink.version}</version>
 		</dependency>
+		<!--
 		<dependency>
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-avro</artifactId>
 			<version>${flink.version}</version>
 		</dependency>
+		-->
 		<!-- Add logging framework, to produce console output when running in the IDE. -->
 		<!-- These dependencies are excluded from the application JAR by default. -->
 		<dependency>
@@ -132,14 +133,13 @@ under the License.
 			<artifactId>google-collections</artifactId>
 			<version>1.0</version>
 		</dependency>
-
-		<!-- https://mvnrepository.com/artifact/com.google.protobuf/protobuf-java -->
+		<!--
 		<dependency>
 			<groupId>com.google.protobuf</groupId>
 			<artifactId>protobuf-java</artifactId>
 			<version>3.6.1</version>
 		</dependency>
-
+		-->
 	</dependencies>
 
 	<build>
@@ -180,7 +180,7 @@ under the License.
 							</filters>
 							<transformers>
 								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-									<mainClass>com.inspur.cloud.StreamingJob</mainClass>
+									<mainClass>com.lynn.flink.JsonEngine</mainClass>
 								</transformer>
 							</transformers>
 						</configuration>
@@ -257,6 +257,7 @@ under the License.
 						<configuration>
 							<sources>
 								<source>src/main/scala</source>
+								<source>src/main/java</source>
 							</sources>
 						</configuration>
 					</execution>
@@ -270,6 +271,7 @@ under the License.
 						<configuration>
 							<sources>
 								<source>src/test/scala</source>
+								<source>src/main/java</source>
 							</sources>
 						</configuration>
 					</execution>
@@ -311,27 +313,61 @@ under the License.
 					<scope>compile</scope>
 				</dependency>
 				<dependency>
+					<groupId>org.apache.flink</groupId>
+					<artifactId>flink-connector-kafka-0.11_${scala.binary.version}</artifactId>
+					<version>${flink.version}</version>
+					<scope>compile</scope>
+				</dependency>
+
+				<dependency>
+					<groupId>org.apache.flink</groupId>
+					<artifactId>flink-table_${scala.binary.version}</artifactId>
+					<version>${flink.version}</version>
+					<scope>compile</scope>
+				</dependency>
+
+				<dependency>
+					<groupId>org.apache.flink</groupId>
+					<artifactId>flink-json</artifactId>
+					<version>${flink.version}</version>
+					<scope>compile</scope>
+				</dependency>
+				<dependency>
 					<groupId>com.fasterxml.jackson.core</groupId>
 					<artifactId>jackson-databind</artifactId>
 					<version>2.9.8</version>
+					<scope>compile</scope>
 				</dependency>
 				<dependency>
 					<groupId>joda-time</groupId>
 					<artifactId>joda-time</artifactId>
 					<version>2.10.1</version>
+					<scope>compile</scope>
 				</dependency>
 				<dependency>
 					<groupId>com.google.collections</groupId>
 					<artifactId>google-collections</artifactId>
 					<version>1.0</version>
+					<scope>compile</scope>
 				</dependency>
-				<!-- https://mvnrepository.com/artifact/com.google.protobuf/protobuf-java -->
+				<!--
 				<dependency>
 					<groupId>com.google.protobuf</groupId>
 					<artifactId>protobuf-java</artifactId>
 					<version>3.6.1</version>
 				</dependency>
+				-->
 
+				<dependency>
+					<groupId>org.slf4j</groupId>
+					<artifactId>slf4j-log4j12</artifactId>
+					<version>1.7.7</version>
+				</dependency>
+				<dependency>
+					<groupId>log4j</groupId>
+					<artifactId>log4j</artifactId>
+					<version>1.2.17</version>
+				</dependency>
 			</dependencies>
 		</profile>
 	</profiles>
