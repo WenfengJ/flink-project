@@ -41,7 +41,7 @@ public class JsonEngine {
     public static void main(String[] args) throws Exception{
         // set up the streaming execution environment
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(1);
+//        env.setParallelism(1);
         StreamTableEnvironment tableEnv = TableEnvironment.getTableEnvironment(env);
 
         Kafka kafka = new Kafka().version("0.11")
